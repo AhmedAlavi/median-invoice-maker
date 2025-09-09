@@ -74,6 +74,20 @@ function uid() {
 export default function MedianInvoiceCreator() {
   const [theme, setTheme] = useState<"light" | "dark">("dark");
 
+  useEffect(() => {
+    async function toBase64(url: string) {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      return new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.readAsDataURL(blob);
+      });
+    }
+
+    toBase64(medianLogoUrl).then((base64) => setLogoDataUrl(base64));
+  }, []);
+
   const colors = useMemo(
     () =>
       theme === "dark"
@@ -760,20 +774,25 @@ export default function MedianInvoiceCreator() {
                     type="number"
                     className="col-span-2 rounded-lg bg-white/10 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-white/30"
                     placeholder="Qty"
-                    value={it.qty}
+                    value={it.qty === 0 ? "" : it.qty}
                     min={0}
                     onChange={(e) =>
-                      updateItem(it.id, { qty: Number(e.target.value) })
+                      updateItem(it.id, {
+                        qty: e.target.value === "" ? 0 : Number(e.target.value),
+                      })
                     }
                   />
                   <input
                     type="number"
                     className="col-span-3 rounded-lg bg-white/10 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-white/30"
                     placeholder="Unit price"
-                    value={it.price}
+                    value={it.price === 0 ? "" : it.price}
                     min={0}
                     onChange={(e) =>
-                      updateItem(it.id, { price: Number(e.target.value) })
+                      updateItem(it.id, {
+                        price:
+                          e.target.value === "" ? 0 : Number(e.target.value),
+                      })
                     }
                   />
                   <button
