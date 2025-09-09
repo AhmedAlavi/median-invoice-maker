@@ -265,10 +265,6 @@ export default function MedianInvoiceCreator() {
         ? rowEls[0].getBoundingClientRect().height
         : FALLBACK_ROW_HEIGHT;
 
-    // space available for content below header/chips/from/bill sections
-    const topSoFar =
-      testPage.getBoundingClientRect().height - A4_PAGE_HEIGHT_PX; // negative or 0 in some engines; we’ll measure differently:
-
     // More reliable: measure everything above the table.
     const tableTop = tableEl?.getBoundingClientRect().top || 0;
     const pageTop = testPage.getBoundingClientRect().top || 0;
@@ -548,12 +544,14 @@ export default function MedianInvoiceCreator() {
               <Input
                 label="Name"
                 value={agency.name}
-                onChange={(e) => setAgency({ ...agency, name: e.target.value })}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setAgency({ ...agency, name: e.target.value })
+                }
               />
               <Input
                 label="Email"
                 value={agency.email}
-                onChange={(e) =>
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setAgency({ ...agency, email: e.target.value })
                 }
               />
@@ -562,14 +560,14 @@ export default function MedianInvoiceCreator() {
               <Input
                 label="Phone"
                 value={agency.phone}
-                onChange={(e) =>
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setAgency({ ...agency, phone: e.target.value })
                 }
               />
               <Input
                 label="Website"
                 value={agency.website}
-                onChange={(e) =>
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setAgency({ ...agency, website: e.target.value })
                 }
               />
@@ -577,7 +575,7 @@ export default function MedianInvoiceCreator() {
             <Input
               label="Address"
               value={agency.address}
-              onChange={(e) =>
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                 setAgency({ ...agency, address: e.target.value })
               }
             />
@@ -657,12 +655,14 @@ export default function MedianInvoiceCreator() {
               <Input
                 label="Name"
                 value={client.name}
-                onChange={(e) => setClient({ ...client, name: e.target.value })}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setClient({ ...client, name: e.target.value })
+                }
               />
               <Input
                 label="Email"
                 value={client.email}
-                onChange={(e) =>
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setClient({ ...client, email: e.target.value })
                 }
               />
@@ -671,14 +671,14 @@ export default function MedianInvoiceCreator() {
               <Input
                 label="Phone"
                 value={client.phone}
-                onChange={(e) =>
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setClient({ ...client, phone: e.target.value })
                 }
               />
               <Input
                 label="Address"
                 value={client.address}
-                onChange={(e) =>
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setClient({ ...client, address: e.target.value })
                 }
               />
@@ -691,7 +691,7 @@ export default function MedianInvoiceCreator() {
               <Input
                 label="Invoice #"
                 value={invoiceMeta.number}
-                onChange={(e) =>
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setInvoiceMeta({ ...invoiceMeta, number: e.target.value })
                 }
               />
@@ -699,7 +699,7 @@ export default function MedianInvoiceCreator() {
                 label="Date"
                 type="date"
                 value={invoiceMeta.date}
-                onChange={(e) =>
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setInvoiceMeta({ ...invoiceMeta, date: e.target.value })
                 }
               />
@@ -709,7 +709,7 @@ export default function MedianInvoiceCreator() {
                 label="Due Date"
                 type="date"
                 value={invoiceMeta.due}
-                onChange={(e) =>
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setInvoiceMeta({ ...invoiceMeta, due: e.target.value })
                 }
               />
@@ -1261,7 +1261,7 @@ function buildExportPageNode({
   agency,
   client,
   invoiceMeta,
-  notes,
+  // notes,
   currencyFmt,
   logoDataUrl,
   pageItems,
