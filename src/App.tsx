@@ -1,26 +1,22 @@
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Download, Plus, Trash2, Upload, Sun, Moon } from "lucide-react";
+import { Download, Sun, Moon } from "lucide-react";
 import Particles from "react-tsparticles";
 import jsPDF from "jspdf";
 import { toPng } from "html-to-image";
 import medianLogoUrl from "./assets/median-logo.png";
-
-// Fixed A4 page "content" width in px for capture, tuned for crispness
-const A4_PAGE_WIDTH_PX = 794; // ~210mm at ~96dpi
-const A4_PAGE_HEIGHT_PX = 1123; // ~297mm at ~96dpi
-
-// Rough safety padding for top+bottom inside the page frame (in px)
-const PAGE_VERTICAL_PADDING = 48;
-
-// Fallback average row height for a line item in the printed table (px).
-const FALLBACK_ROW_HEIGHT = 32;
+import {
+  A4_PAGE_WIDTH_PX,
+  A4_PAGE_HEIGHT_PX,
+  PAGE_VERTICAL_PADDING,
+  FALLBACK_ROW_HEIGHT,
+} from "./constants";
+import type { LineItem } from "./types";
+import InvoiceHeader from "./components/InvoicePreview/InvoiceHeader";
+import ItemsTable from "./components/InvoicePreview/ItemsTable";
+import TotalsPanel from "./components/InvoicePreview/TotalsPanel";
+import InvoiceForm from "./components/InvoiceForm/InvoiceForm";
+import CONFIG from "./config/defaults";
 
 // Split line items into pages based on how many rows fit per page
 function paginateItems(
@@ -44,27 +40,6 @@ function paginateItems(
   }
   return pages;
 }
-
-// ---- Helper Types ----
-type LineItem = {
-  id: string;
-  description: string;
-  qty: number;
-  price: number;
-};
-
-type Company = {
-  name: string;
-  email?: string;
-  phone?: string;
-  address?: string;
-  currency?: string; // optional default currency
-  notes?: string; // optional default notes
-  website?: string; // optional override for agency site
-};
-
-const COMPANIES_URL =
-  "https://ahmedalavi.github.io/median_data/invoice_companies.json";
 
 function uid() {
   return Math.random().toString(36).slice(2, 9);
@@ -116,13 +91,8 @@ export default function MedianInvoiceCreator() {
     [theme]
   );
 
-  const [agency, setAgency] = useState({
-    name: "Median Ltd.",
-    email: "hello@median.ltd",
-    phone: "+94 7X XXX XXXX",
-    address: "Colombo, Sri Lanka",
-    website: "median.ltd",
-  });
+  const processChips = CONFIG.ui.processChips;
+  const [agency, setAgency] = useState(CONFIG.agency);
 
   const [client, setClient] = useState({
     name: "",
@@ -132,7 +102,7 @@ export default function MedianInvoiceCreator() {
   });
 
   const [invoiceMeta, setInvoiceMeta] = useState({
-    number: "INV-1001",
+    number: `INV-${new Date().toISOString().slice(0, 10)}-${uid()}`,
     date: new Date().toISOString().slice(0, 10),
     due: "",
     currency: "LKR",
@@ -142,18 +112,11 @@ export default function MedianInvoiceCreator() {
     { id: uid(), description: "Design & Prototyping", qty: 1, price: 75000 },
   ]);
 
-  const [taxPct, setTaxPct] = useState<number>(0);
-  const [discount, setDiscount] = useState<number>(0);
-  const [notes, setNotes] = useState(
-    "Fast, collaborative, motion‑first. Thank you for choosing Median. Payments are due within 7 days."
-  );
+  const [taxPct, setTaxPct] = useState<number | string>(0);
+  const [discount, setDiscount] = useState<number | string>(0);
+  const [notes, setNotes] = useState<string>(CONFIG.defaults.notes);
 
   const [logoDataUrl, setLogoDataUrl] = useState<string | null>(medianLogoUrl);
-
-  // Companies (client presets)
-  const [companies, setCompanies] = useState<Company[]>([]);
-  const [isLoadingCompanies, setIsLoadingCompanies] = useState(false);
-  const [companiesError, setCompaniesError] = useState<string | null>(null);
 
   const previewRef = useRef<HTMLDivElement>(null);
 
@@ -172,9 +135,12 @@ export default function MedianInvoiceCreator() {
     () => items.reduce((s, it) => s + (it.qty || 0) * (it.price || 0), 0),
     [items]
   );
-  const tax = useMemo(() => subtotal * (taxPct / 100), [subtotal, taxPct]);
+  const tax = useMemo(
+    () => subtotal * (Number(taxPct) / 100),
+    [subtotal, taxPct]
+  );
   const total = useMemo(
-    () => Math.max(0, subtotal + tax - (discount || 0)),
+    () => Math.max(0, subtotal + tax - (Number(discount) || 0)),
     [subtotal, tax, discount]
   );
 
@@ -184,59 +150,6 @@ export default function MedianInvoiceCreator() {
     setItems((p) => p.filter((i) => i.id !== id));
   const updateItem = (id: string, patch: Partial<LineItem>) =>
     setItems((p) => p.map((i) => (i.id === id ? { ...i, ...patch } : i)));
-
-  const onLogoChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    const reader = new FileReader();
-    reader.onload = () => setLogoDataUrl(reader.result as string);
-    reader.readAsDataURL(f);
-  };
-
-  const applyCompany = useCallback((c: Company) => {
-    setClient((prev) => ({
-      name: c.name || prev.name,
-      email: c.email || prev.email,
-      phone: c.phone || prev.phone,
-      address: c.address || prev.address,
-    }));
-    if (c.currency) setInvoiceMeta((m) => ({ ...m, currency: c.currency! }));
-    if (c.notes) setNotes(c.notes);
-    if (c.website) setAgency((a) => ({ ...a, website: c.website! }));
-    localStorage.setItem("median:lastCompany", c.name);
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        setIsLoadingCompanies(true);
-        setCompaniesError(null);
-        const res = await fetch(COMPANIES_URL, { cache: "no-store" });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        const list: Company[] = Array.isArray(data)
-          ? data
-          : data.companies || [];
-        if (cancelled) return;
-        setCompanies(list);
-        const last = localStorage.getItem("median:lastCompany");
-        if (last) {
-          const found = list.find((c) => c.name === last);
-          if (found) applyCompany(found);
-        }
-      } catch (e: any) {
-        if (!cancelled)
-          setCompaniesError(e?.message || "Failed to load companies");
-      } finally {
-        if (!cancelled) setIsLoadingCompanies(false);
-      }
-    }
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [applyCompany]);
 
   const exportPDF = async () => {
     // ----- 1) Figure out how many rows fit -----
@@ -386,15 +299,18 @@ export default function MedianInvoiceCreator() {
         (s, it) => s + (it.qty || 0) * (it.price || 0),
         0
       );
-      const taxVal = subtotalVal * (taxPct / 100);
-      const totalVal = Math.max(0, subtotalVal + taxVal - (discount || 0));
+      const taxVal = subtotalVal * (Number(taxPct) / 100);
+      const totalVal = Math.max(
+        0,
+        subtotalVal + taxVal - (Number(discount) || 0)
+      );
 
       totalsCol.appendChild(mkRow("Subtotal", currencyFmt(subtotalVal)));
       totalsCol.appendChild(
         mkRow(`Tax (${taxPct || 0}%)`, currencyFmt(taxVal))
       );
       totalsCol.appendChild(
-        mkRow("Discount", `- ${currencyFmt(discount || 0)}`)
+        mkRow("Discount", `- ${currencyFmt(Number(discount) || 0)}`)
       );
       const sep = document.createElement("div");
       sep.style.borderTop = `1px solid ${colors.line}`;
@@ -418,15 +334,17 @@ export default function MedianInvoiceCreator() {
 
       const f1 = document.createElement("div");
       f1.innerHTML = `
-        <div>Bank Transfer</div>
-        <div>Account Name: ${agency.name}</div>
-        <div>Bank: — | IBAN: — | SWIFT: —</div>
+        <div>Bank Name: ${CONFIG.bank_account.bank_name}</div>
+        <div>Account Name: ${CONFIG.bank_account.account_name}</div>
+        <div>Account Number: ${CONFIG.bank_account.account_number}</div>
+        <div>Branch: ${CONFIG.bank_account.branch}</div>
+        <div>SWIFT/BIC: ${CONFIG.bank_account.swift_bic}</div>
       `;
       const f2 = document.createElement("div");
       f2.style.textAlign = "right";
       f2.innerHTML = `
         <div>Thank you for your business.</div>
-        <div>Questions? ${agency.email}</div>
+        <div>Questions? ${CONFIG.agency.email}</div>
       `;
 
       footer.appendChild(f1);
@@ -520,7 +438,8 @@ export default function MedianInvoiceCreator() {
             transition={{ duration: 0.4 }}
             className="text-2xl font-semibold tracking-tight text-white/90 md:text-3xl"
           >
-            Median — Simple Invoice Creator
+            Median{" "}
+            <span className="hidden md:inline">— Simple Invoice Creator</span>
           </motion.h1>
 
           <div className="flex items-center gap-2">
@@ -538,301 +457,53 @@ export default function MedianInvoiceCreator() {
             </button>
             <button
               onClick={exportPDF}
-              className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-medium text-black shadow hover:shadow-lg"
+              className="cursor-pointer inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-medium text-black shadow hover:shadow-lg"
             >
-              <Download className="h-4 w-4" /> Export PDF
+              <Download className="h-4 w-4" />{" "}
+              <span className="hidden md:inline">Export</span> PDF
             </button>
           </div>
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">
           {/* Left: Form */}
-          <motion.div
-            initial={{ opacity: 0, x: -12 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.35 }}
-            className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-md md:p-6"
-          >
-            <SectionTitle>Agency</SectionTitle>
-            <FieldRow>
-              <Input
-                label="Name"
-                value={agency.name}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  setAgency({ ...agency, name: e.target.value })
-                }
-              />
-              <Input
-                label="Email"
-                value={agency.email}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  setAgency({ ...agency, email: e.target.value })
-                }
-              />
-            </FieldRow>
-            <FieldRow>
-              <Input
-                label="Phone"
-                value={agency.phone}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  setAgency({ ...agency, phone: e.target.value })
-                }
-              />
-              <Input
-                label="Website"
-                value={agency.website}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  setAgency({ ...agency, website: e.target.value })
-                }
-              />
-            </FieldRow>
-            <Input
-              label="Address"
-              value={agency.address}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                setAgency({ ...agency, address: e.target.value })
-              }
-            />
-
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-sm text-white/70">
-                  Upload Logo
-                </label>
-                <div className="flex items-center gap-3">
-                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm hover:bg-white/20">
-                    <Upload className="h-4 w-4" />
-                    <span>Choose file</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={onLogoChange}
-                    />
-                  </label>
-                  {logoDataUrl && (
-                    <span className="text-xs text-white/60">Logo ready ✓</span>
-                  )}
-                </div>
-              </div>
-              <div>
-                <label className="mb-1 block text-sm text-white/70">
-                  Currency
-                </label>
-                <select
-                  className="w-full rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-white/30"
-                  value={invoiceMeta.currency}
-                  onChange={(e) =>
-                    setInvoiceMeta({ ...invoiceMeta, currency: e.target.value })
-                  }
-                >
-                  {["LKR", "USD", "EUR", "GBP", "AED", "INR"].map((c) => (
-                    <option value={c} key={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <Divider />
-
-            {/* Quick-pick client pills */}
-            <div className="mb-2 flex flex-wrap items-center gap-2">
-              {isLoadingCompanies && (
-                <span className="text-xs text-white/60">
-                  Loading companies…
-                </span>
-              )}
-
-              {!isLoadingCompanies &&
-                companies.map((c) => (
-                  <button
-                    key={c.name}
-                    onClick={() => applyCompany(c)}
-                    className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs hover:bg-white/20"
-                    title={`Apply ${c.name}`}
-                  >
-                    {c.name}
-                  </button>
-                ))}
-
-              {companiesError && (
-                <span className="text-xs text-red-300">
-                  Failed: {companiesError}
-                </span>
-              )}
-            </div>
-
-            <SectionTitle>Client</SectionTitle>
-            <FieldRow>
-              <Input
-                label="Name"
-                value={client.name}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  setClient({ ...client, name: e.target.value })
-                }
-              />
-              <Input
-                label="Email"
-                value={client.email}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  setClient({ ...client, email: e.target.value })
-                }
-              />
-            </FieldRow>
-            <FieldRow>
-              <Input
-                label="Phone"
-                value={client.phone}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  setClient({ ...client, phone: e.target.value })
-                }
-              />
-              <Input
-                label="Address"
-                value={client.address}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  setClient({ ...client, address: e.target.value })
-                }
-              />
-            </FieldRow>
-
-            <Divider />
-
-            <SectionTitle>Invoice Details</SectionTitle>
-            <FieldRow>
-              <Input
-                label="Invoice #"
-                value={invoiceMeta.number}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  setInvoiceMeta({ ...invoiceMeta, number: e.target.value })
-                }
-              />
-              <Input
-                label="Date"
-                type="date"
-                value={invoiceMeta.date}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  setInvoiceMeta({ ...invoiceMeta, date: e.target.value })
-                }
-              />
-            </FieldRow>
-            <FieldRow>
-              <Input
-                label="Due Date"
-                type="date"
-                value={invoiceMeta.due}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  setInvoiceMeta({ ...invoiceMeta, due: e.target.value })
-                }
-              />
-              <div className="grid grid-cols-2 gap-3">
-                <NumberInput
-                  label="Tax %"
-                  value={taxPct}
-                  onChange={setTaxPct}
-                  min={0}
-                />
-                <NumberInput
-                  label="Discount"
-                  value={discount}
-                  onChange={setDiscount}
-                  min={0}
-                />
-              </div>
-            </FieldRow>
-
-            <div className="mt-4">
-              <label className="mb-1 block text-sm text-white/70">Notes</label>
-              <textarea
-                rows={3}
-                className="w-full rounded-xl border border-white/10 bg-white/10 p-3 text-sm outline-none focus:ring-2 focus:ring-white/30"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-              />
-            </div>
-
-            <Divider />
-
-            <SectionTitle>Line Items</SectionTitle>
-            <div className="space-y-3">
-              {items.map((it) => (
-                <div
-                  key={it.id}
-                  className="grid grid-cols-12 items-center gap-2 rounded-xl border border-white/10 bg-white/5 p-3"
-                >
-                  <input
-                    className="col-span-6 rounded-lg bg-white/10 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-white/30"
-                    placeholder="Description"
-                    value={it.description}
-                    onChange={(e) =>
-                      updateItem(it.id, { description: e.target.value })
-                    }
-                  />
-                  <input
-                    type="number"
-                    className="col-span-2 rounded-lg bg-white/10 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-white/30"
-                    placeholder="Qty"
-                    value={it.qty === 0 ? "" : it.qty}
-                    min={0}
-                    onChange={(e) =>
-                      updateItem(it.id, {
-                        qty: e.target.value === "" ? 0 : Number(e.target.value),
-                      })
-                    }
-                  />
-                  <input
-                    type="number"
-                    className="col-span-3 rounded-lg bg-white/10 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-white/30"
-                    placeholder="Unit price"
-                    value={it.price === 0 ? "" : it.price}
-                    min={0}
-                    onChange={(e) =>
-                      updateItem(it.id, {
-                        price:
-                          e.target.value === "" ? 0 : Number(e.target.value),
-                      })
-                    }
-                  />
-                  <button
-                    onClick={() => removeItem(it.id)}
-                    className="col-span-1 inline-flex items-center justify-center rounded-lg border border-red-500/30 bg-red-500/10 p-2 text-red-300 hover:bg-red-500/20"
-                    aria-label="Remove line"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
-            <div className="mt-3">
-              <button
-                onClick={addItem}
-                className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm hover:bg-white/20"
-              >
-                <Plus className="h-4 w-4" /> Add line
-              </button>
-            </div>
-          </motion.div>
+          <InvoiceForm
+            agency={agency}
+            setAgency={setAgency}
+            client={client}
+            setClient={setClient}
+            invoiceMeta={invoiceMeta}
+            setInvoiceMeta={setInvoiceMeta}
+            taxPct={taxPct}
+            setTaxPct={setTaxPct}
+            discount={discount}
+            setDiscount={setDiscount}
+            notes={notes}
+            setNotes={setNotes}
+            items={items}
+            addItem={addItem}
+            removeItem={removeItem}
+            updateItem={updateItem}
+            logoDataUrl={logoDataUrl}
+            setLogoDataUrl={setLogoDataUrl}
+          />
 
           {/* Right: Preview */}
           <motion.div
             initial={{ opacity: 0, x: 12 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.35 }}
-            className="flex flex-col gap-4"
+            className="min-w-0 flex flex-col gap-4"
           >
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-white/70">
-                <span className="mr-2">Subtotal:</span>
-                <strong className="text-white">{currencyFmt(subtotal)}</strong>
-                <span className="mx-2">•</span>
-                <span className="mr-2">Tax:</span>
-                <strong className="text-white">{currencyFmt(tax)}</strong>
-                <span className="mx-2">•</span>
-                <span className="mr-2">Total:</span>
-                <strong className="text-white">{currencyFmt(total)}</strong>
-              </div>
+            <div className="flex flex-wrap text-sm text-white/70">
+              <span className="mr-2">Subtotal:</span>
+              <strong className="text-white">{currencyFmt(subtotal)}</strong>
+              <span className="mx-2">•</span>
+              <span className="mr-2">Tax:</span>
+              <strong className="text-white">{currencyFmt(tax)}</strong>
+              <span className="mx-2">•</span>
+              <span className="mr-2">Total:</span>
+              <strong className="text-white">{currencyFmt(total)}</strong>
             </div>
 
             <div
@@ -868,76 +539,15 @@ export default function MedianInvoiceCreator() {
               />
 
               {/* Header */}
-              <div className="flex items-start justify-between">
-                <div>
-                  <div
-                    style={{
-                      fontSize: 24,
-                      fontWeight: 700,
-                      letterSpacing: -0.2,
-                    }}
-                  >
-                    Invoice
-                  </div>
-                  <div
-                    className="mt-1"
-                    style={{ fontSize: 12, color: colors.subtext }}
-                  >
-                    {invoiceMeta.number}
-                  </div>
-                  <div
-                    className="mt-1"
-                    style={{ fontSize: 12, color: colors.subtext }}
-                  >
-                    Date: {invoiceMeta.date || "—"}
-                  </div>
-                  {invoiceMeta.due && (
-                    <div
-                      className="mt-1"
-                      style={{ fontSize: 12, color: colors.subtext }}
-                    >
-                      Due: {invoiceMeta.due}
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-center gap-3">
-                  {logoDataUrl ? (
-                    <img
-                      src={logoDataUrl}
-                      alt="Logo"
-                      style={{
-                        height: 48,
-                        width: "auto",
-                        objectFit: "contain",
-                      }}
-                    />
-                  ) : (
-                    <div
-                      style={{
-                        height: 48,
-                        width: 48,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        border: `1px dashed ${colors.line}`,
-                        color: colors.subtext,
-                        fontSize: 10,
-                      }}
-                    >
-                      LOGO
-                    </div>
-                  )}
-                </div>
-              </div>
+              <InvoiceHeader
+                colors={colors}
+                invoiceMeta={invoiceMeta}
+                logoDataUrl={logoDataUrl}
+              />
 
               {/* Feature chips */}
               <div className="mt-4 flex flex-wrap gap-2">
-                {[
-                  "Discovery & goals",
-                  "Prototype & motion",
-                  "Build & integrate",
-                  "Launch & optimize",
-                ].map((t) => (
+                {processChips.map((t) => (
                   <span
                     key={t}
                     style={{
@@ -1012,161 +622,23 @@ export default function MedianInvoiceCreator() {
               </div>
 
               {/* Items */}
-              <div className="mt-6">
-                <table className="w-full" style={{ fontSize: 13 }}>
-                  <thead>
-                    <tr style={{ borderBottom: `1px solid ${colors.line}` }}>
-                      <th
-                        className="py-2 text-left"
-                        style={{
-                          color: colors.subtext,
-                          textTransform: "uppercase",
-                          letterSpacing: 1,
-                        }}
-                      >
-                        Description
-                      </th>
-                      <th
-                        className="py-2 text-right"
-                        style={{
-                          color: colors.subtext,
-                          textTransform: "uppercase",
-                          letterSpacing: 1,
-                        }}
-                      >
-                        Qty
-                      </th>
-                      <th
-                        className="py-2 text-right"
-                        style={{
-                          color: colors.subtext,
-                          textTransform: "uppercase",
-                          letterSpacing: 1,
-                        }}
-                      >
-                        Unit
-                      </th>
-                      <th
-                        className="py-2 text-right"
-                        style={{
-                          color: colors.subtext,
-                          textTransform: "uppercase",
-                          letterSpacing: 1,
-                        }}
-                      >
-                        Amount
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.map((it) => (
-                      <tr
-                        key={it.id}
-                        style={{ borderBottom: `1px solid ${colors.lineSoft}` }}
-                      >
-                        <td
-                          className="py-2 pr-2"
-                          style={{ color: colors.text, fontWeight: 500 }}
-                        >
-                          {it.description || "Item"}
-                        </td>
-                        <td
-                          className="py-2 text-right"
-                          style={{ color: colors.subtext }}
-                        >
-                          {it.qty || 0}
-                        </td>
-                        <td
-                          className="py-2 text-right"
-                          style={{ color: colors.subtext }}
-                        >
-                          {currencyFmt(it.price || 0)}
-                        </td>
-                        <td
-                          className="py-2 text-right"
-                          style={{ color: colors.text, fontWeight: 600 }}
-                        >
-                          {currencyFmt((it.qty || 0) * (it.price || 0))}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <ItemsTable
+                items={items}
+                colors={colors}
+                currencyFmt={currencyFmt}
+              />
 
               {/* Totals */}
-              <div className="mt-6 grid grid-cols-2 gap-4">
-                <div>
-                  <h4
-                    style={{
-                      fontSize: 12,
-                      fontWeight: 700,
-                      letterSpacing: 1,
-                      color: colors.subtext,
-                    }}
-                  >
-                    Notes
-                  </h4>
-                  <p
-                    className="mt-2"
-                    style={{
-                      whiteSpace: "pre-wrap",
-                      fontSize: 12,
-                      lineHeight: 1.6,
-                      color: colors.subtext,
-                    }}
-                  >
-                    {notes}
-                  </p>
-                </div>
-                <div className="ml-auto w-full max-w-xs">
-                  <div className="space-y-2" style={{ fontSize: 13 }}>
-                    <Row
-                      label="Subtotal"
-                      value={currencyFmt(subtotal)}
-                      color={colors}
-                    />
-                    <Row
-                      label={`Tax (${taxPct || 0}%)`}
-                      value={currencyFmt(tax)}
-                      color={colors}
-                    />
-                    <Row
-                      label="Discount"
-                      value={`- ${currencyFmt(discount || 0)}`}
-                      color={colors}
-                    />
-                    <div
-                      style={{
-                        borderTop: `1px solid ${colors.line}`,
-                        paddingTop: 8,
-                      }}
-                    >
-                      <Row
-                        label={<strong>Total</strong>}
-                        value={<strong>{currencyFmt(total)}</strong>}
-                        color={colors}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Footer bar */}
-              <div
-                className="mt-8 grid grid-cols-2 gap-4"
-                style={{ fontSize: 11, color: colors.subtext }}
-              >
-                <div>
-                  <div>Bank Transfer</div>
-                  <div>Account Name: {agency.name}</div>
-                  <div>Bank: — | IBAN: — | SWIFT: —</div>
-                </div>
-                <div className="text-right">
-                  <div>Thank you for your business.</div>
-                  <div>Questions? {agency.email}</div>
-                </div>
-              </div>
+              <TotalsPanel
+                colors={colors}
+                notes={notes}
+                subtotal={subtotal}
+                tax={tax}
+                total={total}
+                taxPct={taxPct}
+                discount={discount}
+                currencyFmt={currencyFmt}
+              />
             </div>
           </motion.div>
         </div>
@@ -1185,91 +657,6 @@ export default function MedianInvoiceCreator() {
           opacity: 0,
         }}
       />
-    </div>
-  );
-}
-
-// ---- UI bits ----
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return (
-    <h2 className="mb-2 text-sm font-semibold uppercase tracking-wider text-white/70">
-      {children}
-    </h2>
-  );
-}
-
-function FieldRow({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">{children}</div>
-  );
-}
-
-function Divider() {
-  return <div className="my-4 h-px w-full bg-white/10" />;
-}
-
-function Input({
-  label,
-  type = "text",
-  value,
-  onChange,
-}: {
-  label: string;
-  type?: string;
-  value: any;
-  onChange: any;
-}) {
-  return (
-    <div>
-      <label className="mb-1 block text-sm text-white/70">{label}</label>
-      <input
-        type={type}
-        value={value}
-        onChange={onChange}
-        className="w-full rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-white/30"
-      />
-    </div>
-  );
-}
-
-function NumberInput({
-  label,
-  value,
-  onChange,
-  min = 0,
-}: {
-  label: string;
-  value: number;
-  onChange: (n: number) => void;
-  min?: number;
-}) {
-  return (
-    <div>
-      <label className="mb-1 block text-sm text-white/70">{label}</label>
-      <input
-        type="number"
-        min={min}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-white/30"
-      />
-    </div>
-  );
-}
-
-function Row({
-  label,
-  value,
-  color,
-}: {
-  label: React.ReactNode;
-  value: React.ReactNode;
-  color: any;
-}) {
-  return (
-    <div className="flex items-center justify-between">
-      <div style={{ color: color.subtext }}>{label}</div>
-      <div style={{ color: color.text }}>{value}</div>
     </div>
   );
 }
