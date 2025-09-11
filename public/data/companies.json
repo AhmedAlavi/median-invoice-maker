@@ -1,0 +1,17 @@
+[
+  {
+    "name": "Holiday Tuk Tuk",
+    "email": "accounts@holidaytuktuk.com",
+    "phone": "+947 79548 751",
+    "address": "Kandy, Sri Lanka.",
+    "currency": "LKR",
+    "notes": "Thank you for you business."
+  },
+  {
+    "name": "Crown Motors",
+    "email": "billing@crownmotors.ie",
+    "phone": "+353 8947 83278",
+    "address": "Dublin, Ireland",
+    "currency": "EUR"
+  }
+]

@@ -97,9 +97,19 @@ export default function InvoiceForm({
       try {
         setIsLoadingCompanies(true);
         setCompaniesError(null);
-        const res = await fetch(companiesUrl, { cache: "no-store" });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
+
+        let data;
+        try {
+          const res = await fetch(companiesUrl, { cache: "no-store" });
+          if (!res.ok) throw new Error("Remote fetch failed");
+          data = await res.json();
+        } catch {
+          const local = await fetch("/data/companies.json").then((r) =>
+            r.json()
+          );
+          data = local;
+        }
+
         const list: Company[] = Array.isArray(data)
           ? data
           : data.companies || [];
