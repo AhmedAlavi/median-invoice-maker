@@ -9,6 +9,7 @@ import ItemsEditor from "./ItemsEditor";
 import { Upload } from "lucide-react";
 import { motion } from "framer-motion";
 import type { Agency, Client, InvoiceMeta } from "../../types/invoiceForm";
+import CONFIG from "../../config/defaults";
 
 type Props = {
   // state (lifted from App)
@@ -65,6 +66,8 @@ export default function InvoiceForm({
   const [companies, setCompanies] = useState<Company[]>([]);
   const [isLoadingCompanies, setIsLoadingCompanies] = useState(false);
   const [companiesError, setCompaniesError] = useState<string | null>(null);
+
+  const isPro = CONFIG.plan === "pro" || CONFIG.plan === "admin";
 
   const onLogoChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
     const f = e.target.files?.[0];
@@ -143,94 +146,106 @@ export default function InvoiceForm({
       className="min-w-0 rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-md md:p-6"
     >
       {/* Agency */}
-      <SectionTitle>Agency</SectionTitle>
-      <FieldRow>
-        <Input
-          label="Name"
-          value={agency.name}
-          onChange={(e: any) => setAgency({ ...agency, name: e.target.value })}
-        />
-        <Input
-          label="Email"
-          value={agency.email}
-          onChange={(e: any) => setAgency({ ...agency, email: e.target.value })}
-        />
-      </FieldRow>
-      <FieldRow>
-        <Input
-          label="Phone"
-          value={agency.phone}
-          onChange={(e: any) => setAgency({ ...agency, phone: e.target.value })}
-        />
-        <Input
-          label="Website"
-          value={agency.website}
-          onChange={(e: any) =>
-            setAgency({ ...agency, website: e.target.value })
-          }
-        />
-      </FieldRow>
-      <Input
-        label="Address"
-        value={agency.address}
-        onChange={(e: any) => setAgency({ ...agency, address: e.target.value })}
-      />
-
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
+      {isPro && (
         <div>
-          <label className="mb-1 block text-sm text-white/70">
-            Upload Logo
-          </label>
-          <div className="flex items-center gap-3">
-            <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm hover:bg-white/20">
-              <Upload className="h-4 w-4" />
-              <span>Choose file</span>
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={onLogoChange}
-              />
-            </label>
-            {logoDataUrl && (
-              <span className="text-xs text-white/60">Logo ready ✓</span>
-            )}
-          </div>
-        </div>
-        <div className="relative">
-          <select
-            className="w-full appearance-none rounded-xl border border-white/10
+          <SectionTitle>Agency</SectionTitle>
+          <FieldRow>
+            <Input
+              label="Name"
+              value={agency.name}
+              onChange={(e: any) =>
+                setAgency({ ...agency, name: e.target.value })
+              }
+            />
+            <Input
+              label="Email"
+              value={agency.email}
+              onChange={(e: any) =>
+                setAgency({ ...agency, email: e.target.value })
+              }
+            />
+          </FieldRow>
+          <FieldRow>
+            <Input
+              label="Phone"
+              value={agency.phone}
+              onChange={(e: any) =>
+                setAgency({ ...agency, phone: e.target.value })
+              }
+            />
+            <Input
+              label="Website"
+              value={agency.website}
+              onChange={(e: any) =>
+                setAgency({ ...agency, website: e.target.value })
+              }
+            />
+          </FieldRow>
+          <Input
+            label="Address"
+            value={agency.address}
+            onChange={(e: any) =>
+              setAgency({ ...agency, address: e.target.value })
+            }
+          />
+
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm text-white/70">
+                Upload Logo
+              </label>
+              <div className="flex items-center gap-3">
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm hover:bg-white/20">
+                  <Upload className="h-4 w-4" />
+                  <span>Choose file</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={onLogoChange}
+                  />
+                </label>
+                {logoDataUrl && (
+                  <span className="text-xs text-white/60">Logo ready ✓</span>
+                )}
+              </div>
+            </div>
+            <div className="relative">
+              <select
+                className="w-full appearance-none rounded-xl border border-white/10
                bg-[#111317] text-white px-3 py-2 text-sm
                outline-none focus:ring-2 focus:ring-white/30"
-            value={invoiceMeta.currency}
-            onChange={(e) =>
-              setInvoiceMeta({ ...invoiceMeta, currency: e.target.value })
-            }
-          >
-            {["LKR", "USD", "EUR", "GBP", "AED", "INR"].map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+                value={invoiceMeta.currency}
+                onChange={(e) =>
+                  setInvoiceMeta({ ...invoiceMeta, currency: e.target.value })
+                }
+              >
+                {["LKR", "USD", "EUR", "GBP", "AED", "INR"].map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
 
-          {/* chevron */}
-          <svg
-            aria-hidden="true"
-            viewBox="0 0 24 24"
-            className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/70"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M6 9l6 6 6-6" />
-          </svg>
+              {/* chevron */}
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/70"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M6 9l6 6 6-6" />
+              </svg>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
 
-      <Divider />
+      {isPro && <Divider />}
 
       {/* Quick-pick client pills */}
       <div className="mb-2 flex flex-wrap items-center gap-2">

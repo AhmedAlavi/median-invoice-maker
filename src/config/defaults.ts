@@ -10,7 +10,10 @@ type ThemeColors = {
   shadow: string;
 };
 
+type Plan = "basic" | "pro" | "admin";
+
 export type ClientConfig = {
+  plan: Plan;
   defaults: {
     notes: string;
     currency: string;
@@ -41,6 +44,7 @@ export type ClientConfig = {
 };
 
 const CONFIG: ClientConfig = {
+  plan: "basic",
   defaults: {
     notes:
       "Design. Develop. Maintain. Grow. Thank you for choosing Median. Payment is due within 7 days.",
