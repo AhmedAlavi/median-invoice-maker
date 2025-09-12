@@ -38,6 +38,9 @@ export default defineConfig({
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,webp}"],
         navigateFallback: "/index.html", // SPA fallback for offline nav
+        additionalManifestEntries: [
+          { url: "/data/companies.json", revision: null }, // <- ensure included
+        ],
         runtimeCaching: [
           // 1) Companies JSON (remote) - cache with fast fallback
           {

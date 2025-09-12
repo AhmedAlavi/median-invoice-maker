@@ -1,3 +1,15 @@
+type ThemeColors = {
+  bg: string;
+  surface: string;
+  text: string;
+  subtext: string;
+  line: string;
+  lineSoft: string;
+  accentA: string;
+  accentB: string;
+  shadow: string;
+};
+
 export type ClientConfig = {
   defaults: {
     notes: string;
@@ -21,12 +33,15 @@ export type ClientConfig = {
   };
   ui: {
     processChips: string[];
+    colors: {
+      dark: ThemeColors;
+      light: ThemeColors;
+    };
   };
 };
 
 const CONFIG: ClientConfig = {
   defaults: {
-    // choose one of the variants above
     notes:
       "Design. Develop. Maintain. Grow. Thank you for choosing Median. Payment is due within 7 days.",
     currency: "AED",
@@ -55,6 +70,30 @@ const CONFIG: ClientConfig = {
       "Maintain & Support",
       "Optimize & Grow",
     ],
+    colors: {
+      dark: {
+        bg: "#0B0B0E",
+        surface: "#111317",
+        text: "#E5E7EB",
+        subtext: "#A3A3A3",
+        line: "#25272B",
+        lineSoft: "#1C1F24",
+        accentA: "#7c5cff", // Median brand orange
+        accentB: "#00e7a7", // Median brand red
+        shadow: "0 10px 30px rgba(0,0,0,.45)",
+      },
+      light: {
+        bg: "#FFFFFF",
+        surface: "#FFFFFF",
+        text: "#111827",
+        subtext: "#6B7280",
+        line: "#E5E7EB",
+        lineSoft: "#F3F4F6",
+        accentA: "#7c5cff",
+        accentB: "#00e7a7",
+        shadow: "0 10px 30px rgba(16,24,40,.1)",
+      },
+    },
   },
 };
 
